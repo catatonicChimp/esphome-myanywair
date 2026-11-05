@@ -46,8 +46,8 @@ struct FujitsuACState {
   uint8_t mode{FUJITSU_MODE_AUTO};
   float target_temp{NAN};
   uint8_t fan{FUJITSU_FAN_AUTO};
-  uint8_t vswing{0};
-  uint8_t hswing{0};
+  uint16_t vswing{0};  // 0xFFFF when the unit does not expose louvre positions
+  uint16_t hswing{0};
   bool light{false};
   float ac_temp{NAN};   // 10:33 raw / 100 (unit not confirmed, likely °F)
   uint16_t status{0};   // 10:31
@@ -102,6 +102,7 @@ class FujitsuACComponent : public PollingComponent, public uart::UARTDevice {
   std::vector<FujitsuACChild *> children_;
   std::deque<Command> queue_;
   std::vector<uint8_t> rx_;
+  uint32_t rx_bytes_{0};
   FujitsuACState state_;
   bool waiting_{false};
   bool frame_seen_{false};

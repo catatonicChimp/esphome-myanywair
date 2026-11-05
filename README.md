@@ -28,7 +28,23 @@ useful content is:
   manufacturer's own `fuji.c`.
 - ESPHome component: **compiles cleanly** for ESP32 (Arduino) and ESP32-C3
   (ESP-IDF) with ESPHome 2026.10.
-- On-hardware validation of the ESPHome port: **pending** — see "TODO" below.
+- **Validated on real hardware** (stock Sensibo board, Fujitsu indoor unit,
+  Nov 2026): polls are answered, `power`/`mode`/`target temperature`/`fan`/AC
+  temperature all read correctly, and setting the target from Home Assistant is
+  applied by the unit and reported back.
+
+### Findings from the live unit
+
+- **AC temperature `10:33` is °F** (value ÷ 100). Observed `7175` → 71.75 °F
+  (≈ 22.1 °C) with a 22 °C setpoint. The unit reports in whatever unit its
+  remote/display is configured for.
+- **Vertical/horizontal swing return `0xFFFF`** on this indoor unit — it does
+  not expose louvre positions over this protocol. The swing selects stay
+  unknown rather than showing a bogus value.
+- The stock board's on-board transistor stage means **no software UART
+  inversion** is needed there (confirmed: plain 9600 8N1 on GPIO5/GPIO4 works).
+- The unit also emits unsolicited type-`0x02`, 1-byte frames; the component
+  ignores them.
 
 ## The hardware
 
@@ -143,6 +159,44 @@ read-only backup procedure, and [`docs/firmware-notes.md`](docs/firmware-notes.m
 for how the original firmware was recovered (a temporary, RAM-only/encrypted
 bootloader probe; the original flash sector was restored and verified
 afterwards).
+
+### ⚠️ The first flash must be encrypted
+
+Because flash encryption is enabled, a **plaintext** serial write will not boot
+(the ROM tries to decrypt it and sees garbage). ESPHome's normal
+`esphome run`/`upload` over serial writes plaintext, so for the *first* flash
+use esptool directly with `--encrypt`:
+
+```bash
+esphome compile anywair-stock-board.yaml
+esptool --chip esp32c3 --port /dev/cu.usbserial-XXXX --baud 115200 \
+  --before no-reset --after hard-reset \
+  write-flash --encrypt --flash-mode dio --flash-freq 40m \
+  0x0 .esphome/build/anywair-stock/build/firmware.factory.bin
+```
+
+(40 MHz matches the stock flash configuration; the chip is an XMC 4 MB part.)
+
+After that first boot, **use OTA** for all updates — no serial or encryption
+flags needed:
+
+```bash
+esphome upload anywair-stock-board.yaml --device anywair-stock.local
+```
+
+To go back to stock, write the original backup **without** `--encrypt`:
+
+```bash
+esptool --chip esp32c3 --port /dev/cu.usbserial-XXXX --baud 115200 \
+  write-flash 0x0 stock-backup.bin
+```
+
+### Logging
+
+On the ESP32-C3, ESPHome's logger defaults to **USB-Serial-JTAG**, so logs do
+*not* appear on the UART0 pins the USB-UART adapter is attached to. Either read
+logs over the network (`esphome logs …`) or set `logger: hardware_uart: UART0`
+and reflash.
 
 > ⚠️ Keep a backup of the original encrypted flash image. It is the only way
 > back to stock firmware, and it contains your WiFi credentials and device keys

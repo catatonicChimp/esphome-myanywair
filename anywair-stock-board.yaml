@@ -32,11 +32,20 @@ external_components:
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # Fallback hotspot so a bad password doesn't leave the board unreachable.
+  ap:
+    ssid: "anywair-fallback"
+    password: "anywair123"
+
+captive_portal:
 
 api:
 
+# Keep the USB/UART0 log console (GPIO21) - this is a different peripheral
+# from the AC's UART1 on GPIO5/GPIO4, so it does not conflict.
 logger:
-  baud_rate: 0
+  baud_rate: 115200
+  level: DEBUG
 
 ota:
   - platform: esphome

@@ -108,6 +108,7 @@ void FujitsuACComponent::loop() {
     uint8_t b;
     if (!this->read_byte(&b))
       break;
+    this->rx_bytes_++;
     this->rx_.push_back(b);
     if (this->rx_.size() > 1024)
       this->rx_.clear();  // runaway guard; resync via checksum anyway
@@ -116,8 +117,19 @@ void FujitsuACComponent::loop() {
 
   const uint32_t now = millis();
   if (this->waiting_) {
-    if (this->frame_seen_ || (now - this->last_tx_) > 600) {
+    if (this->frame_seen_) {
       this->frame_seen_ = false;
+      this->waiting_ = false;
+      this->queue_.pop_front();
+    } else if ((now - this->last_tx_) > 600) {
+      const uint8_t cmd_type = this->queue_.front().frame[0];
+      if (this->rx_bytes_ == 0) {
+        ESP_LOGD(TAG, "No response to command 0x%02X (timeout)", cmd_type);
+      } else {
+        ESP_LOGW(TAG, "Received %u byte(s) but no valid frame - check UART polarity/baud/wiring (command 0x%02X)",
+                 this->rx_bytes_, cmd_type);
+      }
+      this->rx_bytes_ = 0;
       this->waiting_ = false;
       this->queue_.pop_front();
     }
@@ -147,6 +159,8 @@ void FujitsuACComponent::process_rx_() {
       this->rx_.erase(this->rx_.begin());
       continue;  // resync by one byte
     }
+    ESP_LOGD(TAG, "RX frame: type=0x%02X payload_len=%u", this->rx_[0], payload_len);
+    this->rx_bytes_ = 0;
     this->handle_frame_(this->rx_.data());
     this->rx_.erase(this->rx_.begin(), this->rx_.begin() + total);
     this->frame_seen_ = true;
@@ -194,14 +208,14 @@ bool FujitsuACComponent::apply_entry_(uint8_t tag, uint8_t addr, uint16_t value)
       }
       return false;
     case 0x10:
-      if (s.vswing != (uint8_t) value) {
-        s.vswing = (uint8_t) value;
+      if (s.vswing != value) {
+        s.vswing = value;
         return true;
       }
       return false;
     case 0x22:
-      if (s.hswing != (uint8_t) value) {
-        s.hswing = (uint8_t) value;
+      if (s.hswing != value) {
+        s.hswing = value;
         return true;
       }
       return false;
@@ -259,6 +273,12 @@ void FujitsuACComponent::handle_frame_(const uint8_t *frame) {
   this->state_.have_state = true;
   if (changed || !this->published_once_) {
     this->published_once_ = true;
+    // Integer formatting only: %f is unavailable in the default ESPHome printf.
+    ESP_LOGD(TAG, "State: power=%d mode=0x%02X target=%d.%dC fan=0x%02X vswing=0x%04X hswing=0x%04X light=%d ac_temp=%d.%02d",
+             this->state_.power, this->state_.mode, (int) this->state_.target_temp,
+             (int) (this->state_.target_temp * 10) % 10, this->state_.fan, this->state_.vswing,
+             this->state_.hswing, this->state_.light, (int) this->state_.ac_temp,
+             (int) (this->state_.ac_temp * 100) % 100);
     this->publish_state_();
   }
 }
@@ -403,9 +423,10 @@ void FujitsuSwingSelect::control(size_t index) {
 }
 
 void FujitsuSwingSelect::on_state(const FujitsuACState &s) {
-  const uint8_t value = this->vertical_ ? s.vswing : s.hswing;
+  const uint16_t value = this->vertical_ ? s.vswing : s.hswing;
   const std::vector<std::string> &options =
       this->vertical_ ? FUJITSU_VSWING_OPTIONS : FUJITSU_HSWING_OPTIONS;
+  // 0xFFFF (or any out-of-range value) = the unit does not report this swing.
   if (value < options.size())
     this->publish_state((size_t) value);
 }

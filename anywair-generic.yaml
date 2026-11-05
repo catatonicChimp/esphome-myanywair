@@ -31,7 +31,9 @@ wifi:
 api:
 
 logger:
-  baud_rate: 0   # keep the hardware UART free for the air conditioner
+  # UART0 log console is separate from the AC UART, so it can stay enabled.
+  baud_rate: 115200
+  level: DEBUG
 
 ota:
   - platform: esphome

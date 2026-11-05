@@ -64,8 +64,14 @@ Equivalently: `sum16(body) + csum16 == 0xFFFF`. See `fujitsu_codec.py`.
 | `10:23` | h-swing range marker | `0001` = rangeFull |
 | `10:b6` | **light** | `0000`=off, `0001`=on |
 | `10:31` | status | `0000` (raw passthrough) |
-| `10:33` | AC sensor (likely room temp °F) | `1ce8`→74.0 (value ÷ 100; unit not yet validated) |
+| `10:33` | AC room temperature, **°F** | value ÷ 100 — live-validated: `1c07`→71.75 °F with a 22 °C setpoint |
 | `11:01` | supported-modes status | `0000` |
+
+> **Live-hardware notes (Nov 2026, Fujitsu indoor unit):** register `10:33`
+> reports **Fahrenheit** on this unit, and the swing registers `10:10`/`10:22`
+> return **`ffff`** (not supported by this indoor unit — no louvre positions
+> over this protocol). `10:b6` (panel light) also returns `ffff` here. The unit
+> additionally sends unsolicited type-`0x02` frames with a 1-byte payload.
 
 > All mappings in this table are now confirmed from the recovered firmware's
 > `fuji.c` write/read handlers, not just the capture. Firmware details:
