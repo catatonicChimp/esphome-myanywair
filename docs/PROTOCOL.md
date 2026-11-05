@@ -67,11 +67,18 @@ Equivalently: `sum16(body) + csum16 == 0xFFFF`. See `fujitsu_codec.py`.
 | `10:33` | AC room temperature, **°F** | value ÷ 100 — live-validated: `1c07`→71.75 °F with a 22 °C setpoint |
 | `11:01` | supported-modes status | `0000` |
 
-> **Live-hardware notes (Nov 2026, Fujitsu indoor unit):** register `10:33`
-> reports **Fahrenheit** on this unit, and the swing registers `10:10`/`10:22`
-> return **`ffff`** (not supported by this indoor unit — no louvre positions
-> over this protocol). `10:b6` (panel light) also returns `ffff` here. The unit
-> additionally sends unsolicited type-`0x02` frames with a 1-byte payload.
+> **Live-hardware notes (Nov 2026, Fujitsu indoor unit):**
+>
+> - `10:33` reports **Fahrenheit** on this unit (value ÷ 100; `7175` → 71.75 °F
+>   ≈ 22.08 °C against a 22 °C setpoint).
+> - Swing registers `10:10`/`10:22` return **`ffff`** — this indoor unit has no
+>   louvre positions over this protocol. `10:b6` (panel light) is `ffff` too.
+> - Fan **`0x0002` (quiet) is not supported**: it is accepted but the unit
+>   reports `0x0005` (low) back. Auto `0x0000`, low `0x0005`, medium `0x0008`
+>   and high `0x000b` all work.
+> - `10:31` and `11:01` both read `0000` on this unit.
+> - The unit also sends unsolicited type-`0x02` frames with a 1-byte payload;
+>   the component ignores them.
 
 > All mappings in this table are now confirmed from the recovered firmware's
 > `fuji.c` write/read handlers, not just the capture. Firmware details:

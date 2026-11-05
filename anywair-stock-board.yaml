@@ -59,33 +59,49 @@ uart:
 fujitsu_ac:
   id: ac_hub
   update_interval: 5s
+  # The indoor unit reports its room temperature in its own display unit.
+  temperature_unit: fahrenheit
 
 climate:
   - platform: fujitsu_ac
     id: ac_climate
     name: "Air Conditioner"
 
-select:
-  - platform: fujitsu_ac
-    id: ac_vswing
-    name: "Vertical Swing"
-    swing: vertical
-  - platform: fujitsu_ac
-    id: ac_hswing
-    name: "Horizontal Swing"
-    swing: horizontal
-
-switch:
-  - platform: fujitsu_ac
-    id: ac_light
-    name: "AC Panel Light"
+# This indoor unit returns 0xffff for the swing and panel-light registers, so
+# those entities would only ever read "unknown". Un-comment them for units that
+# do support louvre positions / a light.
+#
+# select:
+#   - platform: fujitsu_ac
+#     id: ac_vswing
+#     name: "Vertical Swing"
+#     swing: vertical
+#   - platform: fujitsu_ac
+#     id: ac_hswing
+#     name: "Horizontal Swing"
+#     swing: horizontal
+#
+# switch:
+#   - platform: fujitsu_ac
+#     id: ac_light
+#     name: "AC Panel Light"
 
 sensor:
+  # Reported by the AC itself (10:33), always published here in °C.
   - platform: fujitsu_ac
     id: ac_room_temp
     name: "AC Room Temperature"
-    unit_of_measurement: "°F"
-    accuracy_decimals: 1
+  # Raw diagnostic registers.
+  - platform: fujitsu_ac
+    type: status
+    name: "AC Status (10:31)"
+    entity_category: diagnostic
+    accuracy_decimals: 0
+  - platform: fujitsu_ac
+    type: supported_modes
+    name: "AC Supported Modes (11:01)"
+    entity_category: diagnostic
+    accuracy_decimals: 0
 
 # --- Un-comment once you find the I2C pins ---
 # i2c:

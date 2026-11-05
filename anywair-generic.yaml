@@ -57,6 +57,9 @@ uart:
 fujitsu_ac:
   id: ac_hub
   update_interval: 5s
+  # Set this to match the unit's own display unit (checked against the remote,
+  # or by comparing the entity against a known room temperature).
+  temperature_unit: fahrenheit
 
 climate:
   - platform: fujitsu_ac
@@ -79,8 +82,7 @@ switch:
     name: "AC Panel Light"
 
 sensor:
+  # AC-reported room temperature (10:33), published in °C.
   - platform: fujitsu_ac
     id: ac_room_temp
     name: "AC Room Temperature"
-    unit_of_measurement: "°F"    # firmware divides 10:33 by 100; unit unconfirmed
-    accuracy_decimals: 1

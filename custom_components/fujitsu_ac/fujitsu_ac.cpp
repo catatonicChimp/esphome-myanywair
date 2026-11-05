@@ -226,8 +226,13 @@ bool FujitsuACComponent::apply_entry_(uint8_t tag, uint8_t addr, uint16_t value)
       }
       return false;
     case 0x33: {
-      // Firmware treats 0..3 as status codes and 0xFFFF as invalid.
-      const float t = (value == 0xFFFF || value <= 3) ? NAN : (value / 100.0f);
+      // Firmware treats 0..3 as status codes and 0xFFFF as invalid. The
+      // remaining value is the room temperature in the AC's own unit, /100.
+      float t = NAN;
+      if (value != 0xFFFF && value > 3) {
+        const float raw = value / 100.0f;
+        t = (this->temp_unit_ == FUJITSU_TEMP_CELSIUS) ? raw : (raw - 32.0f) * 5.0f / 9.0f;
+      }
       if (t != s.ac_temp) {
         s.ac_temp = t;
         return true;
@@ -359,6 +364,8 @@ static climate::ClimateFanMode fan_from_wire(uint8_t w) {
 
 climate::ClimateTraits FujitsuClimate::traits() {
   auto traits = climate::ClimateTraits();
+  // The AC's own room temperature (10:33) is fed to current_temperature, in °C.
+  traits.add_feature_flags(climate::CLIMATE_SUPPORTS_CURRENT_TEMPERATURE);
   traits.set_supported_modes({climate::CLIMATE_MODE_OFF, climate::CLIMATE_MODE_HEAT_COOL,
                               climate::CLIMATE_MODE_COOL, climate::CLIMATE_MODE_DRY,
                               climate::CLIMATE_MODE_FAN_ONLY, climate::CLIMATE_MODE_HEAT});
@@ -405,6 +412,8 @@ void FujitsuClimate::on_state(const FujitsuACState &s) {
   this->mode = s.power ? mode_from_wire(s.mode) : climate::CLIMATE_MODE_OFF;
   if (!std::isnan(s.target_temp))
     this->target_temperature = s.target_temp;
+  if (!std::isnan(s.ac_temp))
+    this->current_temperature = s.ac_temp;
   this->fan_mode = fan_from_wire(s.fan);
   this->publish_state();
 }
@@ -413,6 +422,7 @@ void FujitsuClimate::on_state(const FujitsuACState &s) {
 // Swing selects
 // ---------------------------------------------------------------------------
 
+#ifdef USE_SELECT
 void FujitsuSwingSelect::control(size_t index) {
   // Wire values are sequential, so the option index IS the register value.
   if (this->vertical_)
@@ -430,23 +440,37 @@ void FujitsuSwingSelect::on_state(const FujitsuACState &s) {
   if (value < options.size())
     this->publish_state((size_t) value);
 }
+#endif  // USE_SELECT
 
 // ---------------------------------------------------------------------------
 // Light switch
 // ---------------------------------------------------------------------------
 
+#ifdef USE_SWITCH
 void FujitsuLightSwitch::write_state(bool state) {
   this->parent_->write_light(state);
   this->publish_state(state);
 }
+#endif  // USE_SWITCH
 
 // ---------------------------------------------------------------------------
-// AC temperature sensor (register 10:33)
+// Sensors (10:33 temperature, 10:31 status, 11:01 supported modes)
 // ---------------------------------------------------------------------------
 
-void FujitsuACTempSensor::on_state(const FujitsuACState &state) {
-  if (!std::isnan(state.ac_temp))
-    this->publish_state(state.ac_temp);
+void FujitsuACSensor::on_state(const FujitsuACState &state) {
+  switch (this->sensor_type_) {
+    case FUJITSU_SENSOR_STATUS:
+      this->publish_state((float) state.status);
+      break;
+    case FUJITSU_SENSOR_SUPPORTED_MODES:
+      this->publish_state((float) state.supported);
+      break;
+    case FUJITSU_SENSOR_AC_TEMPERATURE:
+    default:
+      if (!std::isnan(state.ac_temp))
+        this->publish_state(state.ac_temp);
+      break;
+  }
 }
 
 }  // namespace fujitsu_ac

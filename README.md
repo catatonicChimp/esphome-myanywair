@@ -35,12 +35,15 @@ useful content is:
 
 ### Findings from the live unit
 
-- **AC temperature `10:33` is °F** (value ÷ 100). Observed `7175` → 71.75 °F
-  (≈ 22.1 °C) with a 22 °C setpoint. The unit reports in whatever unit its
-  remote/display is configured for.
+- **AC temperature `10:33` is °F** (value ÷ 100). Observed `7175` → 71.75 °F,
+  i.e. 22.08 °C, with a 22 °C setpoint. The unit reports in whatever unit its
+  remote/display is configured for; the component converts it to °C.
+- **Fan "quiet" (`0x0002`) is accepted but the unit reports back "low"**
+  (`0x0005`) — this indoor unit has no quiet fan. Auto/low/medium/high work.
 - **Vertical/horizontal swing return `0xFFFF`** on this indoor unit — it does
   not expose louvre positions over this protocol. The swing selects stay
-  unknown rather than showing a bogus value.
+  unknown rather than showing a bogus value; `10:b6` (panel light) is `0xFFFF`
+  here too.
 - The stock board's on-board transistor stage means **no software UART
   inversion** is needed there (confirmed: plain 9600 8N1 on GPIO5/GPIO4 works).
 - The unit also emits unsolicited type-`0x02`, 1-byte frames; the component
@@ -108,6 +111,9 @@ uart:
 fujitsu_ac:
   id: ac_hub
   update_interval: 5s
+  # Unit the indoor unit reports its room temperature (10:33) in — match the
+  # unit's own display setting. The component converts it to °C.
+  temperature_unit: fahrenheit
 
 climate:
   - platform: fujitsu_ac
@@ -116,13 +122,20 @@ climate:
 
 ### Entities
 
-- `climate` — power, mode (auto/cool/dry/fan/heat), target temperature and fan
-  speed.
-- `select` ("Vertical Swing", "Horizontal Swing") — the fixed louvre positions.
-  These are exposed as selects because ESPHome's climate swing modes only
-  offer on/off-style values, not individual positions.
+- `climate` — power, mode (auto/cool/dry/fan/heat), target temperature, fan
+  speed, and the AC's own room temperature as the current temperature.
+- `sensor` — three kinds, selected with `type:`:
+  - `ac_temperature` (default) — the AC's room temperature (`10:33`),
+    **converted to °C** using the hub's `temperature_unit`.
+  - `status` — raw `10:31`.
+  - `supported_modes` — raw `11:01` bitmask.
+- `select` ("Vertical Swing", "Horizontal Swing") — the fixed louvre positions,
+  as selects because ESPHome's climate swing modes only offer on/off-style
+  values, not individual positions. Only useful on units that report them.
 - `switch` — the AC panel light.
-- `sensor` — the AC-reported temperature (`10:33`).
+
+The `select` and `switch` code is compiled in only when those platforms are
+actually configured, so a config that omits them saves flash.
 
 The hub polls every 5 s and publishes state; commands are queued and each waits
 for the unit's reply (or a 600 ms timeout) before the next is sent.
