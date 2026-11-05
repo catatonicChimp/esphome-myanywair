@@ -1,0 +1,93 @@
+# ESPHome for the actual Sensibo anywAiR board (ESP32-C3-MINI-1).
+#
+# Firmware-confirmed pins (Fuji_init in the stock app):
+#   AC UART TX = GPIO5, RX = GPIO4 (already routed through Q1/Q2, so the
+#   UART itself is standard polarity - no inverted: true needed here).
+#   Boot/download: GPIO9 low at reset, GPIO8 pulled high, EN = reset.
+#
+# Power the board from 12V on J1 (pin 1 = +12V, pin 4 = GND) as before.
+# Flash over UART: pull IO9 to GND, pulse EN, then `esphome run`.
+#
+# NOTE: the HDC1080 temperature/humidity sensor is on I2C; the stock pins
+# were not identified yet. Probe with your multimeter/analyzer before
+# enabling the commented block below.
+
+substitutions:
+  name: anywair-stock
+
+esphome:
+  name: ${name}
+  friendly_name: anywAiR (stock board)
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: custom_components
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+
+logger:
+  baud_rate: 0
+
+ota:
+  - platform: esphome
+
+uart:
+  id: ac_uart
+  tx_pin: GPIO5
+  rx_pin: GPIO4
+  baud_rate: 9600
+
+fujitsu_ac:
+  id: ac_hub
+  update_interval: 5s
+
+climate:
+  - platform: fujitsu_ac
+    id: ac_climate
+    name: "Air Conditioner"
+
+select:
+  - platform: fujitsu_ac
+    id: ac_vswing
+    name: "Vertical Swing"
+    swing: vertical
+  - platform: fujitsu_ac
+    id: ac_hswing
+    name: "Horizontal Swing"
+    swing: horizontal
+
+switch:
+  - platform: fujitsu_ac
+    id: ac_light
+    name: "AC Panel Light"
+
+sensor:
+  - platform: fujitsu_ac
+    id: ac_room_temp
+    name: "AC Room Temperature"
+    unit_of_measurement: "°F"
+    accuracy_decimals: 1
+
+# --- Un-comment once you find the I2C pins ---
+# i2c:
+#   sda: GPIOx
+#   scl: GPIOy
+#   scan: true
+# sensor:
+#   - platform: hdc1080
+#     temperature:
+#       name: "Room Temperature"
+#     humidity:
+#       name: "Room Humidity"
+#     address: 0x40
+#     update_interval: 30s
